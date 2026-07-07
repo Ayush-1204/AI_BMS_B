@@ -1,0 +1,52 @@
+{
+  "buildingId": "ARBOR-DEMO",
+  "label": "ARBOR Demo Building",
+  "floors": [
+    {
+      "id": "LEVEL-1",
+      "label": "Level 1 / Ground Floor",
+      "zones": [
+        { "id": "ZONE-A1", "label": "Zone A1", "overlay": { "left": "5%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-A2", "label": "Zone A2", "overlay": { "left": "36%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-A3", "label": "Zone A3", "overlay": { "left": "67%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-A4", "label": "Zone A4", "overlay": { "left": "5%", "top": "50%", "width": "28%", "height": "40%" } },
+        { "id": "ZONE-A5", "label": "Zone A5", "overlay": { "left": "36%", "top": "50%", "width": "28%", "height": "40%" } },
+        { "id": "ZONE-A6", "label": "Zone A6", "overlay": { "left": "67%", "top": "50%", "width": "28%", "height": "40%" } }
+      ]
+    },
+    {
+      "id": "LEVEL-2",
+      "label": "Level 2 / Offices",
+      "zones": [
+        { "id": "ZONE-B1", "label": "Zone B1", "overlay": { "left": "5%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-B2", "label": "Zone B2", "overlay": { "left": "36%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-B3", "label": "Zone B3", "overlay": { "left": "67%", "top": "10%", "width": "28%", "height": "35%" } },
+        { "id": "ZONE-B4", "label": "Zone B4", "overlay": { "left": "5%", "top": "50%", "width": "28%", "height": "40%" } },
+        { "id": "ZONE-B5", "label": "Zone B5", "overlay": { "left": "36%", "top": "50%", "width": "28%", "height": "40%" } },
+        { "id": "ZONE-B6", "label": "Zone B6", "overlay": { "left": "67%", "top": "50%", "width": "28%", "height": "40%" } }
+      ]
+    },
+    {
+      "id": "LEVEL-3",
+      "label": "Level 3 / R&D",
+      "zones": [
+        { "id": "ZONE-C1", "label": "Zone C1", "overlay": { "left": "10%", "top": "5%", "width": "35%", "height": "25%" } },
+        { "id": "ZONE-C2", "label": "Zone C2", "overlay": { "left": "55%", "top": "5%", "width": "35%", "height": "25%" } },
+        { "id": "ZONE-C3", "label": "Zone C3", "overlay": { "left": "10%", "top": "35%", "width": "35%", "height": "25%" } },
+        { "id": "ZONE-C4", "label": "Zone C4", "overlay": { "left": "55%", "top": "35%", "width": "35%", "height": "25%" } },
+        { "id": "ZONE-C5", "label": "Zone C5", "overlay": { "left": "10%", "top": "65%", "width": "35%", "height": "25%" } },
+        { "id": "ZONE-C6", "label": "Zone C6", "overlay": { "left": "55%", "top": "65%", "width": "35%", "height": "25%" } }
+      ]
+    },
+    {
+      "id": "LEVEL-4",
+      "label": "Level 4 / Executive",
+      "zones": [
+        { "id": "ZONE-D1", "label": "Zone D1", "overlay": { "left": "15%", "top": "15%", "width": "30%", "height": "30%" } },
+        { "id": "ZONE-D2", "label": "Zone D2", "overlay": { "left": "55%", "top": "15%", "width": "30%", "height": "30%" } },
+        { "id": "ZONE-D3", "label": "Zone D3", "overlay": { "left": "15%", "top": "55%", "width": "30%", "height": "30%" } },
+        { "id": "ZONE-D4", "label": "Zone D4", "overlay": { "left": "55%", "top": "55%", "width": "30%", "height": "30%" } }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+node_modules/
+.env
+data/
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Diagnostic and coverage
+coverage/
+.nyc_output/
+pids/
+*.pid

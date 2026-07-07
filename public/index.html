@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARBOR Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030712;
+      --surface: rgba(15, 23, 42, 0.4);
+      --surface-hover: rgba(30, 41, 59, 0.6);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+      --primary: #0ea5e9;
+      --primary-glow: rgba(14, 165, 233, 0.5);
+      --critical: #ef4444;
+      --critical-glow: rgba(239, 68, 68, 0.6);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.6);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-body: 'Inter', sans-serif;
+      --font-display: 'Outfit', sans-serif;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      height: 100vh;
+      font-family: var(--font-body);
+      background: var(--bg);
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+      color: var(--text-main);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .glass-panel {
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+      border-radius: 16px;
+    }
+
+    /* Topbar */
+    .topbar {
+      height: 80px;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--glass-border);
+      background: rgba(3, 7, 18, 0.6);
+      backdrop-filter: blur(20px);
+      z-index: 100;
+    }
+
+    .brand {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+    }
+    
+    .brand-logo svg { width: 20px; height: 20px; color: white; }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: rgba(14, 165, 233, 0.1);
+      border: 1px solid rgba(14, 165, 233, 0.2);
+      color: var(--primary);
+    }
+    .status-pill.disconnected {
+      color: var(--critical);
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 10px var(--primary);
+    }
+    .status-pill.connected .status-dot {
+      animation: pulse 2s infinite;
+    }
+    .status-pill.disconnected .status-dot {
+      background: var(--critical);
+      box-shadow: 0 0 10px var(--critical-glow);
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(14, 165, 233, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: 1px solid var(--glass-border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-main);
+    }
+
+    .btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px); }
+    
+    .btn.active {
+      background: rgba(14, 165, 233, 0.2);
+      color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .content-wrapper {
+      display: flex;
+      flex: 1;
+      gap: 24px;
+      padding: 24px;
+      height: calc(100vh - 80px);
+    }
+
+    /* Sidebar controls */
+    .sidebar {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding: 24px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .control-label {
+      font-family: var(--font-display);
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .styled-select {
+      width: 100%;
+      appearance: none;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .styled-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    .btn-inject {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(153, 27, 27, 0.8));
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      padding: 16px;
+      font-size: 15px;
+      margin-top: auto;
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.25);
+    }
+    .btn-inject:hover {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(185, 28, 28, 1));
+      box-shadow: 0 10px 30px rgba(239, 68, 68, 0.5);
+      border-color: var(--critical);
+      transform: translateY(-2px);
+    }
+
+    /* Main View */
+    .main-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .map-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .map-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: 1px;
+    }
+    
+    .map-title-icon { width: 8px; height: 8px; background: var(--primary); transform: rotate(45deg); box-shadow: 0 0 10px var(--primary); }
+
+    .map-container {
+      flex: 1;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(15, 23, 42, 0.6) 0%, #030712 100%);
+      border: 1px solid var(--glass-border);
+    }
+
+    /* The Floor Grid Graphic */
+    .grid-background {
+      position: absolute;
+      inset: 0;
+      background-size: 50px 50px;
+      background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+      transform: perspective(1000px) rotateX(60deg) scale(2);
+      transform-origin: center 80%;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .map-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 1000px;
+    }
+
+    /* The floor plan SVG lightly visible */
+    .map-inner img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      filter: invert(1) sepia(1) hue-rotate(180deg) saturate(3) opacity(0.2) drop-shadow(0 0 20px var(--primary));
+    }
+
+    .overlay-layer {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Grid Zone Block */
+    .zone-block {
+      position: absolute;
+      background: rgba(14, 165, 233, 0.05);
+      border: 1px solid rgba(14, 165, 233, 0.2);
+      border-radius: 8px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.02);
+      overflow: hidden;
+    }
+
+    .zone-block::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(14, 165, 233, 0.05) 10px,
+        rgba(14, 165, 233, 0.05) 20px
+      );
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    
+    .zone-block:hover {
+      background: rgba(14, 165, 233, 0.1);
+      border-color: rgba(14, 165, 233, 0.4);
+    }
+    
+    .zone-block:hover::before { opacity: 1; }
+
+    .zone-label {
+      position: relative;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(14, 165, 233, 0.8);
+      background: rgba(3, 7, 18, 0.7);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(14, 165, 233, 0.2);
+      backdrop-filter: blur(4px);
+      z-index: 2;
+      transition: all 0.3s;
+    }
+    
+    .zone-block:hover .zone-label {
+      color: var(--primary);
+      border-color: rgba(14, 165, 233, 0.5);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    /* Anomalies */
+    .zone-block.critical {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: var(--critical);
+      box-shadow: 0 0 30px var(--critical-glow), inset 0 0 30px rgba(239, 68, 68, 0.2);
+      animation: pulse-block-critical 1.5s infinite alternate;
+    }
+    .zone-block.critical::before {
+      opacity: 1;
+      background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.1) 10px, rgba(239, 68, 68, 0.1) 20px);
+    }
+    .zone-block.critical .zone-label {
+      color: var(--critical);
+      border-color: var(--critical);
+      box-shadow: 0 0 20px var(--critical-glow);
+      background: rgba(69, 10, 10, 0.8);
+    }
+
+    .zone-block.warning {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: var(--warning);
+      box-shadow: 0 0 30px var(--warning-glow), inset 0 0 30px rgba(245, 158, 11, 0.2);
+      animation: pulse-block-warning 2s infinite alternate;
+    }
+    .zone-block.warning::before {
+      opacity: 1;
+      background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(245, 158, 11, 0.1) 10px, rgba(245, 158, 11, 0.1) 20px);
+    }
+    .zone-block.warning .zone-label {
+      color: var(--warning);
+      border-color: var(--warning);
+      box-shadow: 0 0 20px var(--warning-glow);
+      background: rgba(69, 26, 3, 0.8);
+    }
+
+    @keyframes pulse-block-critical {
+      0% { transform: scale(1); opacity: 0.85; }
+      100% { transform: scale(1.02); opacity: 1; }
+    }
+    @keyframes pulse-block-warning {
+      0% { transform: scale(1); opacity: 0.9; }
+      100% { transform: scale(1.01); opacity: 1; }
+    }
+
+    /* Logs */
+    .logs-panel {
+      width: 420px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logs-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.02);
+      border-radius: 16px 16px 0 0;
+    }
+
+    .logs-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: 1px;
+    }
+
+    .badge-count {
+      background: rgba(14, 165, 233, 0.2);
+      color: var(--primary);
+      border: 1px solid rgba(14, 165, 233, 0.4);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: 0 0 10px rgba(14,165,233, 0.2);
+    }
+
+    .logs-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .logs-content::-webkit-scrollbar { width: 6px; }
+    .logs-content::-webkit-scrollbar-track { background: transparent; }
+    .logs-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    .logs-content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    .log-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 18px;
+      position: relative;
+      animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.3s ease;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .log-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 4px;
+      background: var(--primary);
+    }
+
+    .log-card:hover {
+      background: rgba(30, 41, 59, 0.8);
+      transform: translateX(4px);
+    }
+
+    .log-card.critical { border-color: rgba(239, 68, 68, 0.3); background: rgba(69, 10, 10, 0.4); }
+    .log-card.critical:hover { background: rgba(69, 10, 10, 0.6); }
+    .log-card.critical::before { background: var(--critical); box-shadow: 0 0 15px var(--critical-glow); }
+    
+    .log-card.warning { border-color: rgba(245, 158, 11, 0.3); background: rgba(69, 26, 3, 0.4); }
+    .log-card.warning:hover { background: rgba(69, 26, 3, 0.6); }
+    .log-card.warning::before { background: var(--warning); box-shadow: 0 0 15px var(--warning-glow); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-display);
+    }
+
+    .card-ref {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+    .log-card.critical .card-ref { color: rgba(252, 165, 165, 0.8); }
+
+    .card-repeat {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 900;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text-main);
+      letter-spacing: 0.5px;
+    }
+
+    .log-card.critical .card-title { color: #fca5a5; }
+    .log-card.warning .card-title { color: #fcd34d; }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin: 0;
+    }
+    .log-card.critical .card-desc { color: rgba(254, 202, 202, 0.8); }
+
+    @keyframes slide-up {
+      0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(148, 163, 184, 0.5);
+      font-family: var(--font-display);
+      font-size: 14px;
+      letter-spacing: 1px;
+      border: 1px dashed rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </div>
+      ARBOR BMS
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="sound-toggle-btn" type="button">Sound: OFF</button>
+      <div class="status-pill" id="conn-pill">
+        <div class="status-dot"></div>
+        <span id="conn-status">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="content-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar glass-panel">
+      <div class="control-group">
+        <label class="control-label" for="floor-select">Facility Floor</label>
+        <select id="floor-select" class="styled-select"></select>
+      </div>
+      
+      <div style="height: 1px; background: var(--glass-border); margin: 12px 0;"></div>
+      
+      <div class="control-group">
+        <label class="control-label" for="zone-select">Target Zone</label>
+        <select id="zone-select" class="styled-select"></select>
+      </div>
+      
+      <div class="control-group">
+        <label class="control-label" for="fault-select">Anomaly Vector</label>
+        <select id="fault-select" class="styled-select"></select>
+      </div>
+      
+      <button class="btn btn-inject" id="inject-fault-btn" type="button">
+        SIMULATE ANOMALY
+      </button>
+    </aside>
+
+    <!-- Main Map View -->
+    <main class="main-view">
+      <div class="map-header">
+        <div class="map-title">
+          <div class="map-title-icon"></div>
+          <span id="stage-floor-title">Level 12 / Primary Operations</span>
+        </div>
+      </div>
+      
+      <div class="map-container glass-panel">
+        <div class="grid-background"></div>
+        <div class="map-inner">
+          <div id="overlay-layer" class="overlay-layer"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Logs Panel -->
+    <aside class="logs-panel glass-panel">
+      <div class="logs-header">
+        <div class="logs-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+            <line x1="22" y1="12" x2="2" y2="12"></line>
+            <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            <line x1="6" y1="16" x2="6.01" y2="16"></line>
+            <line x1="10" y1="16" x2="10.01" y2="16"></line>
+          </svg>
+          INCIDENT LOG
+        </div>
+        <div class="badge-count" id="active-alerts">0</div>
+      </div>
+      <div class="logs-content" id="incident-log">
+        <div class="empty-state" id="incident-empty">
+          NO ANOMALIES DETECTED<br/>SYSTEM NOMINAL
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const logList = document.getElementById('incident-log');
+    const emptyEl = document.getElementById('incident-empty');
+    const statusEl = document.getElementById('conn-status');
+    const connPill = document.getElementById('conn-pill');
+    const soundBtn = document.getElementById('sound-toggle-btn');
+    const injectBtn = document.getElementById('inject-fault-btn');
+    const zoneSelect = document.getElementById('zone-select');
+    const faultSelect = document.getElementById('fault-select');
+    const floorSelect = document.getElementById('floor-select');
+    const floorImage = document.getElementById('floor-image');
+    const overlayLayer = document.getElementById('overlay-layer');
+    const stageFloorTitle = document.getElementById('stage-floor-title');
+    const activeAlertsEl = document.getElementById('active-alerts');
+    
+    const cardsByRefId = new Map();
+    const overlaysByZone = new Map();
+
+    let buildingConfig = null;
+    let currentFloorId = null;
+
+    function setConn(state) {
+      connPill.className = 'status-pill';
+      if (state === 'connected') {
+        statusEl.textContent = 'CONNECTED';
+        connPill.classList.add('connected');
+      } else if (state === 'disconnected') {
+        statusEl.textContent = 'CONNECTION LOST';
+        connPill.classList.add('disconnected');
+      } else {
+        statusEl.textContent = 'CONNECTING...';
+      }
+    }
+    setConn('connecting');
+    socket.on('connect', () => setConn('connected'));
+    socket.on('disconnect', () => setConn('disconnected'));
+
+    let audioCtx = null;
+    let isSoundEnabled = false;
+    soundBtn.addEventListener('click', () => {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      isSoundEnabled = !isSoundEnabled;
+      soundBtn.textContent = isSoundEnabled ? 'SOUND: ON' : 'SOUND: OFF';
+      isSoundEnabled ? soundBtn.classList.add('active') : soundBtn.classList.remove('active');
+    });
+
+    function playAlertTone() {
+      if (!audioCtx || !isSoundEnabled) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      
+      const lfo = audioCtx.createOscillator();
+      lfo.frequency.value = 10;
+      const lfoGain = audioCtx.createGain();
+      lfoGain.gain.value = 200;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+      
+      lfo.start();
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+      lfo.stop(audioCtx.currentTime + 0.35);
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str ?? '';
+      return div.innerHTML;
+    }
+
+    function updateActiveAlerts() {
+      activeAlertsEl.textContent = String(cardsByRefId.size);
+    }
+
+    function overlayFor(zone) {
+      return overlaysByZone.get(zone) || null;
+    }
+
+    function setOverlay(zone, severity, labelText) {
+      const ov = overlayFor(zone);
+      if (!ov) return;
+      const label = ov.querySelector('.zone-label');
+      if (label && labelText) label.textContent = labelText;
+
+      ov.classList.remove('critical', 'warning');
+      if (severity === 'critical') ov.classList.add('critical');
+      if (severity === 'warning') ov.classList.add('warning');
+
+      clearTimeout(ov._t);
+      ov._t = setTimeout(() => {
+        ov.classList.remove('critical', 'warning');
+        if (label) label.textContent = zone;
+      }, 8000);
+    }
+
+    function severityFromWorkOrder(wo) {
+      if (wo.priority === 'High') return 'critical';
+      if (wo.priority === 'Medium') return 'warning';
+      return 'info';
+    }
+
+    function createCard(wo) {
+      if (emptyEl) emptyEl.style.display = 'none';
+
+      const card = document.createElement('div');
+      const sevClass = severityFromWorkOrder(wo);
+      card.className = `log-card ${sevClass}`;
+
+      const repeatCount = Number(wo.repeatCount || 1);
+      const showRepeat = repeatCount > 1;
+
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="card-ref">${escapeHtml(wo.referenceId)}</span>
+          <span class="card-repeat" style="display:${showRepeat ? 'inline-block' : 'none'}">×${repeatCount}</span>
+        </div>
+        <div class="card-title">${escapeHtml(wo.faultType.replace(/_/g, ' '))}</div>
+        <p class="card-desc">${escapeHtml(wo.description)}</p>
+      `;
+
+      logList.prepend(card);
+      cardsByRefId.set(wo.referenceId, card);
+      updateActiveAlerts();
+      return card;
+    }
+
+    injectBtn.addEventListener('click', () => {
+      const zone = zoneSelect.value;
+      const type = faultSelect.value;
+      fetch('/api/simulate/fault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, zone }),
+      });
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    });
+
+    socket.on('new-work-order', (wo) => {
+      createCard(wo);
+      const sev = severityFromWorkOrder(wo);
+      const label = `${wo.zone}: ${wo.faultType.replace(/_/g, ' ')}`;
+      if (sev === 'critical') setOverlay(wo.zone, 'critical', label);
+      if (sev === 'warning') setOverlay(wo.zone, 'warning', label);
+      if (wo.priority === 'High') playAlertTone();
+    });
+
+    socket.on('work-order-repeat', ({ referenceId, repeatCount }) => {
+      const card = cardsByRefId.get(referenceId);
+      if (!card) return;
+      
+      const badge = card.querySelector('.card-repeat');
+      if (badge) {
+        badge.style.display = 'inline-block';
+        badge.textContent = `×${repeatCount}`;
+        
+        // Micro animation
+        badge.style.transform = 'scale(1.2)';
+        setTimeout(() => badge.style.transform = 'scale(1)', 200);
+      }
+      
+      // Bump to top
+      logList.prepend(card);
+    });
+
+    function getCurrentFloor() {
+      if (!buildingConfig?.floors?.length) return null;
+      return buildingConfig.floors.find((f) => f.id === currentFloorId) || buildingConfig.floors[0];
+    }
+
+    function buildOverlaysForFloor(floor) {
+      overlaysByZone.clear();
+      overlayLayer.innerHTML = '';
+      if (!floor?.zones?.length) return;
+
+      for (const z of floor.zones) {
+        const ov = document.createElement('div');
+        ov.className = 'zone-block';
+        ov.style.left = z.overlay?.left || '0%';
+        ov.style.top = z.overlay?.top || '0%';
+        ov.style.width = z.overlay?.width || '0%';
+        ov.style.height = z.overlay?.height || '0%';
+
+        const label = document.createElement('div');
+        label.className = 'zone-label';
+        label.textContent = z.id;
+        ov.appendChild(label);
+
+        overlayLayer.appendChild(ov);
+        overlaysByZone.set(z.id, ov);
+      }
+    }
+
+    function setFloor(floorId) {
+      currentFloorId = floorId;
+      const floor = getCurrentFloor();
+      if (!floor) return;
+
+      if (floorImage) floorImage.src = floor.asset;
+      if (stageFloorTitle) stageFloorTitle.textContent = floor.label || floor.id;
+      buildOverlaysForFloor(floor);
+
+      zoneSelect.innerHTML = '';
+      for (const z of floor.zones || []) {
+        const opt = document.createElement('option');
+        opt.value = z.id;
+        opt.textContent = z.id;
+        zoneSelect.appendChild(opt);
+      }
+      if (!zoneSelect.value && floor.zones?.length) zoneSelect.value = floor.zones[0].id;
+    }
+
+    async function loadBuilding() {
+      try {
+        const res = await fetch('/api/building');
+        buildingConfig = await res.json();
+
+        floorSelect.innerHTML = '';
+        for (const f of buildingConfig.floors || []) {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = f.label || f.id;
+          floorSelect.appendChild(opt);
+        }
+
+        const initial = buildingConfig.floors?.[0]?.id || null;
+        if (initial) {
+          floorSelect.value = initial;
+          setFloor(initial);
+        }
+
+        floorSelect.addEventListener('change', () => setFloor(floorSelect.value));
+      } catch (_err) {
+      }
+    }
+
+    async function loadContract() {
+      try {
+        const res = await fetch('/api/contract');
+        const contract = await res.json();
+
+        faultSelect.innerHTML = '';
+        const faults = contract.FAULT_TYPES || {};
+        for (const key of Object.keys(faults)) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = key.replace(/_/g, ' ');
+          faultSelect.appendChild(opt);
+        }
+
+        if (!faultSelect.value) faultSelect.value = 'HVAC_OVERHEAT';
+      } catch (_err) {
+        if (!faultSelect.children.length) {
+          ['HVAC_OVERHEAT', 'LIGHTING_DEFICIENT'].forEach((t) => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t.replace(/_/g, ' ');
+            faultSelect.appendChild(opt);
+          });
+        }
+      }
+    }
+    loadContract();
+    loadBuilding();
+  </script>
+</body>
+</html>
