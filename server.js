@@ -7,8 +7,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 
-const { THRESHOLDS } = require('./constants');
-const { ZONE_IDS, FAULT_TYPES } = require('./constants');
+const { THRESHOLDS, ZONE_IDS, FAULT_TYPES, SENSOR_FAULT_TYPES } = require('./constants');
 const { Telemetry, WorkOrder } = require('./models');
 const { evaluatePayload, getZoneStats } = require('./aiEngine');
 
@@ -29,11 +28,16 @@ function generateReferenceId(agentId) {
 
 function buildDescription(payload, result) {
   const { zone, metrics } = payload;
+  // Use engine-provided reason if present (sensor faults, confidence model)
+  if (result.reason) return `[${zone}] ${result.reason}`;
   if (result.faultType === 'CRITICAL_OVERHEATING') {
-    return `Ambient temperature spiked to ${metrics.ambient_temp_celsius.toFixed(1)}°C in ${zone} while occupied (threshold: 28°C).`;
+    return `Ambient temperature spiked to ${metrics.ambient_temp_celsius.toFixed(1)}°C in ${zone} while occupied (threshold: ${THRESHOLDS.maxTempOccupiedC}°C).`;
+  }
+  if (result.faultType === 'CRITICAL_UNDERCOOLING') {
+    return `Ambient temperature dropped to ${metrics.ambient_temp_celsius.toFixed(1)}°C in ${zone} while occupied (threshold: ${THRESHOLDS.minTempOccupiedC}°C).`;
   }
   if (result.faultType === 'ILLUMINANCE_DEFICIENCY') {
-    return `Work-plane illuminance dropped to ${metrics.work_plane_illuminance_lux} lux in ${zone} while occupied (threshold: 200 lux).`;
+    return `Work-plane illuminance dropped to ${metrics.work_plane_illuminance_lux} lux in ${zone} while occupied (threshold: ${THRESHOLDS.minLuxOccupied} lux).`;
   }
   return `Anomaly detected in ${zone}: ${result.faultType}.`;
 }
@@ -106,7 +110,7 @@ async function handleTelemetry(payload) {
   });
   await workOrder.save();
   io.emit('new-work-order', workOrder);
-  log('ANOMALY', `New work order created — ${workOrder.referenceId}`);
+  log('ANOMALY', `New work order — ${workOrder.referenceId} [confidence:${result.confidence ?? 'N/A'} reason:${result.reason ?? result.faultType}]`);
 
   return { anomaly: true, workOrder, duplicate: false };
 }
@@ -146,7 +150,7 @@ app.post('/api/simulate/fault', async (req, res) => {
 });
 
 app.get('/api/contract', (_req, res) => {
-  res.json({ ZONE_IDS, FAULT_TYPES, THRESHOLDS });
+  res.json({ ZONE_IDS, FAULT_TYPES, SENSOR_FAULT_TYPES, THRESHOLDS });
 });
 
 app.get('/api/building', (_req, res) => {
