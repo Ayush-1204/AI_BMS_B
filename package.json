@@ -9,7 +9,6 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "simulate": "node fleetSimulator.js",
     "reset-db": "node scripts/resetDb.js",
     "test:zscore": "node scripts/testZScore.js",
     "test:dedup": "node scripts/testDedup.js"
