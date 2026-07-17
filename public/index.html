@@ -471,48 +471,44 @@
     .logs-content::-webkit-scrollbar-track { background: transparent; }
     .logs-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
 
-    .log-card {
+    .inc-card {
       background: rgba(15,23,42,0.6);
       border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      padding: 14px 16px;
+      border-radius: 8px;
+      padding: 12px 14px;
       position: relative;
-      animation: slide-up 0.4s cubic-bezier(0.16,1,0.3,1);
-      transition: all 0.3s ease;
-      overflow: hidden;
+      animation: slide-up 0.3s ease;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+      border-left: 4px solid var(--primary);
     }
-    .log-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary); }
-    .log-card:hover { background: rgba(30,41,59,0.8); transform: translateX(3px); }
-    .log-card.critical { border-color: rgba(239,68,68,0.3); background: rgba(69,10,10,0.4); }
-    .log-card.critical::before { background: var(--critical); box-shadow: 0 0 12px var(--critical-glow); }
-    .log-card.critical:hover { background: rgba(69,10,10,0.6); }
-    .log-card.warning { border-color: rgba(245,158,11,0.3); background: rgba(69,26,3,0.4); }
-    .log-card.warning::before { background: var(--warning); box-shadow: 0 0 12px var(--warning-glow); }
-    .log-card.warning:hover { background: rgba(69,26,3,0.6); }
-    .log-card.severe { border-color: rgba(249,115,22,0.3); background: rgba(60,20,0,0.4); }
-    .log-card.severe::before { background: var(--severe); box-shadow: 0 0 12px var(--severe-glow); }
+    .inc-card:hover { background: rgba(30,41,59,0.8); }
+    .inc-card.critical { border-left-color: var(--critical); border-color: rgba(239,68,68,0.3); background: rgba(69,10,10,0.4); box-shadow: 0 0 12px rgba(239,68,68,0.1); }
+    .inc-card.severe { border-left-color: var(--severe); border-color: rgba(249,115,22,0.3); background: rgba(60,20,0,0.4); }
+    .inc-card.warning { border-left-color: var(--warning); border-color: rgba(245,158,11,0.3); background: rgba(69,26,3,0.4); }
+    .inc-card.sensor { border-left-color: #a78bfa; border-color: rgba(139,92,246,0.3); background: rgba(46,16,101,0.4); }
 
-    .card-header { display: flex; justify-content: space-between; align-items: center; }
-    .card-ref { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; font-weight: 700; font-family: var(--font-display); }
-    .log-card.critical .card-ref { color: rgba(252,165,165,0.7); }
-    .card-repeat { background: rgba(245,158,11,0.2); color: var(--warning); border: 1px solid rgba(245,158,11,0.4); padding: 3px 8px; border-radius: 5px; font-size: 10px; font-weight: 900; font-family: var(--font-display); }
+    .inc-header { font-size: 11px; color: var(--text-muted); font-weight: 700; font-family: var(--font-display); letter-spacing: 1px; }
+    .inc-title { font-size: 13px; font-weight: 800; font-family: var(--font-display); letter-spacing: 0.5px; text-transform: uppercase; }
+    .inc-card.critical .inc-title { color: #fca5a5; }
+    .inc-card.severe .inc-title, .inc-card.warning .inc-title { color: #fcd34d; }
+    .inc-card.sensor .inc-title { color: #c4b5fd; }
 
-    .card-badge { display: flex; gap: 6px; flex-wrap: wrap; }
-    .tier-badge { font-size: 9px; font-weight: 900; font-family: var(--font-display); letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; }
-    .tier-badge.critical { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
-    .tier-badge.severe   { background: rgba(249,115,22,0.2); color: #fdba74; border: 1px solid rgba(249,115,22,0.3); }
-    .tier-badge.standard { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
-    .tier-badge.sensor   { background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
-    .conf-badge { font-size: 9px; font-weight: 700; font-family: var(--font-display); padding: 2px 7px; border-radius: 4px; background: rgba(14,165,233,0.1); color: rgba(147,211,245,0.8); border: 1px solid rgba(14,165,233,0.2); }
+    .inc-metric { font-size: 20px; font-weight: 900; font-family: var(--font-display); margin: 2px 0; }
+    .inc-card.critical .inc-metric { color: #ef4444; }
+    .inc-card.severe .inc-metric { color: #f97316; }
+    .inc-card.warning .inc-metric { color: #f59e0b; }
 
-    .card-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: 0.5px; }
-    .log-card.critical .card-title { color: #fca5a5; }
-    .log-card.warning .card-title, .log-card.severe .card-title { color: #fcd34d; }
-    .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.55; }
-    .log-card.critical .card-desc { color: rgba(254,202,202,0.75); }
+    .inc-meta { font-size: 10px; color: var(--text-muted); font-weight: 700; display: flex; flex-direction: column; gap: 3px; font-family: var(--font-display); letter-spacing: 0.5px; }
+    .inc-desc { margin-top: 6px; font-weight: 400; font-family: monospace; font-size: 11px; line-height: 1.4; opacity: 0.8; letter-spacing: 0; }
+    
+    .inc-badge { padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.1); }
+    .inc-badge.active { background: rgba(239,68,68,0.2); color: #fca5a5; }
+    .inc-badge.recovering { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+    .inc-badge.resolved { background: rgba(100,116,139,0.2); color: #cbd5e1; }
+
+    .logs-section-title { font-size: 10px; font-family: var(--font-display); letter-spacing: 1px; color: var(--text-muted); margin: 8px 0 4px 0; text-transform: uppercase; font-weight: 800; border-bottom: 1px solid var(--glass-border); padding-bottom: 4px; display: none; }
 
     .empty-state {
       text-align: center; padding: 48px 20px; color: rgba(148,163,184,0.4);
@@ -628,12 +624,20 @@
             <line x1="12" y1="9" x2="12" y2="13"></line>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          INCIDENT LOG
+          INCIDENTS
         </div>
         <div class="badge-count" id="active-alerts">0</div>
       </div>
       <div class="logs-content" id="incident-log">
-        <div class="empty-state" id="incident-empty">NO ANOMALIES DETECTED<br/>SYSTEM NOMINAL</div>
+        <div class="empty-state" id="incident-empty">SYSTEM NOMINAL<br/>0 ACTIVE INCIDENTS</div>
+        <div class="logs-section-title" id="sec-active">Active Incidents</div>
+        <div id="list-active" style="display:flex;flex-direction:column;gap:8px"></div>
+        
+        <div class="logs-section-title" id="sec-recovering">Recovering</div>
+        <div id="list-recovering" style="display:flex;flex-direction:column;gap:8px"></div>
+        
+        <div class="logs-section-title" id="sec-resolved">History (Last 60s)</div>
+        <div id="list-resolved" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </aside>
 
@@ -734,7 +738,7 @@
       const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML;
     }
     function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
-    function updateActiveAlerts() { activeAlertsEl.textContent = String(cardsByRefId.size); }
+    const incidentsByKey = new Map(); // key = zone|faultType
 
     // ── Zone overlay management ──────────────────────────────────────────────
     function setOverlay(zone, severity, labelText) {
@@ -766,55 +770,142 @@
       return 'standard';
     }
 
-    // ── Incident log cards ───────────────────────────────────────────────────
-    function createCard(wo) {
-      if (emptyEl) emptyEl.style.display = 'none';
-      const card = document.createElement('div');
-      const sevCls   = severityClass(wo);
-      const tier     = wo.tier || tierLabel(wo);
-      const conf     = wo.confidence != null ? wo.confidence : null;
-      const repeat   = Number(wo.repeatCount || 1);
-      card.className = `log-card ${sevCls === 'info' ? 'warning' : sevCls}`;
-      card.innerHTML = `
-        <div class="card-header">
-          <span class="card-ref">${escapeHtml(wo.referenceId)}</span>
-          <span class="card-repeat" style="display:${repeat > 1 ? 'inline-block' : 'none'}">×${repeat}</span>
-        </div>
-        <div class="card-badge">
-          <span class="tier-badge ${tier}">${tier.toUpperCase()}</span>
-          ${conf != null ? `<span class="conf-badge">${conf}/100</span>` : ''}
-        </div>
-        <div class="card-title">${escapeHtml((wo.faultType || '').replace(/_/g, ' '))}</div>
-        <p class="card-desc">${escapeHtml(wo.description)}</p>
-      `;
-      logList.prepend(card);
-      cardsByRefId.set(wo.referenceId, card);
-      updateActiveAlerts();
-      return card;
+    // ── Incident-Centric Logic ───────────────────────────────────────────────
+    function formatDuration(ms) {
+      const sec = Math.max(0, Math.floor(ms / 1000));
+      if (sec < 60) return `${sec}s`;
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}m ${s}s`;
     }
 
-    // ── Socket events ────────────────────────────────────────────────────────
-    socket.on('new-work-order', (wo) => {
-      createCard(wo);
-      const sev   = severityClass(wo);
-      const label = `${wo.zone}: ${(wo.faultType || '').replace(/_/g, ' ')}`;
-      if (sev === 'critical') setOverlay(wo.zone, 'critical', label);
-      else                     setOverlay(wo.zone, 'warning',  label);
-      if (wo.priority === 'High') playAlertTone();
-    });
-
-    socket.on('work-order-repeat', ({ referenceId, repeatCount }) => {
-      const card = cardsByRefId.get(referenceId);
-      if (!card) return;
-      const badge = card.querySelector('.card-repeat');
-      if (badge) {
-        badge.style.display = 'inline-block';
-        badge.textContent   = `×${repeatCount}`;
-        badge.style.transform = 'scale(1.25)';
-        setTimeout(() => badge.style.transform = 'scale(1)', 200);
+    function formatLiveMetric(zone, faultType) {
+      // Fetch latest simulated value dynamically from local graph buffers
+      if (faultType.includes('TEMP') || faultType.includes('OVERHEAT') || faultType.includes('UNDERCOOL')) {
+        const buf = zoneTempBufs.get(zone);
+        if (buf && buf.length) return `${buf[buf.length-1].toFixed(1)}°C`;
+      } else {
+        const buf = zoneLuxBufs.get(zone);
+        if (buf && buf.length) return `${Math.round(buf[buf.length-1])} lx`;
       }
-      logList.prepend(card);
-    });
+      return '—';
+    }
+
+    function processIncidentEvent(wo) {
+      const key = `${wo.zone}|${wo.faultType}`;
+      const now = Date.now();
+      let inc = incidentsByKey.get(key);
+
+      // We might not get a new-work-order for a repeat if we refresh the page, 
+      // so handle creation on both new and repeat events seamlessly.
+      if (!inc) {
+        inc = {
+          key,
+          zone: wo.zone,
+          faultType: wo.faultType,
+          description: wo.description,
+          tier: wo.tier || tierLabel(wo),
+          severity: severityClass(wo),
+          confidence: wo.confidence || (wo.priority === 'High' ? 100 : 80),
+          firstSeen: now,
+          lastSeen: now,
+          repeatCount: wo.repeatCount || 1,
+          status: 'ACTIVE',
+          dom: document.createElement('div')
+        };
+        inc.dom.className = `inc-card ${inc.severity === 'info' ? 'warning' : inc.severity}`;
+        incidentsByKey.set(key, inc);
+        if (inc.severity === 'critical') playAlertTone();
+      } else {
+        inc.lastSeen = now;
+        inc.status = 'ACTIVE';
+        if (wo.repeatCount) inc.repeatCount = wo.repeatCount;
+        if (wo.confidence) inc.confidence = wo.confidence;
+      }
+
+      const label = `${inc.zone}: ${inc.faultType.replace(/_/g, ' ')}`;
+      setOverlay(inc.zone, inc.severity === 'critical' ? 'critical' : 'warning', label);
+    }
+
+    socket.on('new-work-order', processIncidentEvent);
+    socket.on('work-order-repeat', processIncidentEvent);
+
+    // ── Incident Lifecycle Loop ──────────────────────────────────────────────
+    setInterval(() => {
+      const now = Date.now();
+      let activeCount = 0;
+      const listActive = document.getElementById('list-active');
+      const listRec    = document.getElementById('list-recovering');
+      const listRes    = document.getElementById('list-resolved');
+      
+      const arr = Array.from(incidentsByKey.values());
+
+      arr.forEach(inc => {
+        const age = now - inc.lastSeen;
+        
+        // 1. State transitions based on silence from backend telemetry stream
+        if (inc.status === 'ACTIVE' && age > 15000) {
+          inc.status = 'RECOVERING';
+          inc.repeatCount = 1; // reset repeat tracking for next time
+        } else if (inc.status === 'RECOVERING' && age > 60000) {
+          inc.status = 'RESOLVED';
+        }
+
+        if (inc.status === 'ACTIVE') activeCount++;
+
+        // 2. Erase from history if old enough
+        if (inc.status === 'RESOLVED' && age > 120000) {
+          if (inc.dom.parentNode) inc.dom.parentNode.removeChild(inc.dom);
+          incidentsByKey.delete(inc.key);
+          return;
+        }
+
+        // 3. Update DOM content live
+        const metricVal = formatLiveMetric(inc.zone, inc.faultType);
+        const duration  = formatDuration(now - inc.firstSeen);
+        
+        inc.dom.innerHTML = `
+          <div class="inc-header">${inc.zone} <span style="float:right;color:inherit"><span class="inc-badge" style="display:${inc.repeatCount > 1 ? 'inline' : 'none'}">×${inc.repeatCount}</span></span></div>
+          <div class="inc-title">${inc.faultType.replace(/_/g, ' ')}</div>
+          <div class="inc-metric">${metricVal}</div>
+          <div class="inc-meta">
+            <div>DURATION : ${duration}</div>
+            <div>CONFIDENCE : ${Math.round(inc.confidence)}%</div>
+            <div>STATUS : <span class="inc-badge ${inc.status.toLowerCase()}">${inc.status}</span></div>
+            <div class="inc-desc">${escapeHtml(inc.description)}</div>
+          </div>
+        `;
+      });
+
+      // Update Global State
+      activeAlertsEl.textContent = activeCount;
+      const emptyState = document.getElementById('incident-empty');
+      if (emptyState) emptyState.style.display = arr.length ? 'none' : 'block';
+
+      // Sort
+      const scoreStatus = { ACTIVE: 3, RECOVERING: 2, RESOLVED: 1 };
+      const scoreTier   = { critical: 5, severe: 4, warning: 3, sensor: 2, standard: 1, info: 0 };
+      
+      arr.sort((a, b) => {
+        if (a.status !== b.status) return scoreStatus[b.status] - scoreStatus[a.status];
+        if (a.tier !== b.tier)     return scoreTier[b.tier] - scoreTier[a.tier];
+        return b.lastSeen - a.lastSeen;
+      });
+
+      // Distribute to DOM buckets
+      if (listActive && listRec && listRes) {
+        arr.forEach(inc => {
+          if (inc.status === 'ACTIVE') listActive.appendChild(inc.dom);
+          else if (inc.status === 'RECOVERING') listRec.appendChild(inc.dom);
+          else listRes.appendChild(inc.dom);
+        });
+
+        document.getElementById('sec-active').style.display = listActive.children.length ? 'block' : 'none';
+        document.getElementById('sec-recovering').style.display = listRec.children.length ? 'block' : 'none';
+        document.getElementById('sec-resolved').style.display = listRes.children.length ? 'block' : 'none';
+      }
+      
+    }, 1000);
 
     // ── Building / Floor rendering ───────────────────────────────────────────
     function buildOverlaysForFloor(floor) {
