@@ -842,39 +842,218 @@
       if (!floor) return;
       if (stageTitle) stageTitle.textContent = floor.label || floor.id;
       buildOverlaysForFloor(floor);
+      // ── Floor-scoped graphs: rebuild for current floor's zones only ──────
+      const floorZoneIds = (floor.zones || []).map(z => z.id);
+      buildTelemGraphs(floorZoneIds);
+      // Re-draw existing buffers immediately if sim is already running
+      floorZoneIds.forEach(z => redrawZoneGraph(z));
     }
 
-    // ── Simulation Engine ────────────────────────────────────────────────────
-    function initZoneSimState(zoneId, idx) {
-      const normalTemp = 21 + (idx % 3) * 0.7;   // 21–22.4°C varied per zone
-      const normalLux  = 430 + (idx % 5) * 30;    // 430–550 lux varied per zone
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STATE-DRIVEN SIMULATION ENGINE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── Zone personality profiles ─────────────────────────────────────────────
+    // Each personality defines baseline values and behavioural probabilities.
+    // p_warm/p_cool = probability per tick of starting a WARMING/COOLING event.
+    // p_lux_drop    = probability per tick of sudden lux dip.
+    // occupancy     = occupancy pattern name (always true for now, matches engine).
+    const PERSONALITIES = {
+      conference: { normalTemp: 22.0, normalLux: 480, p_warm: 0.0038, p_cool: 0.0008, p_lux_drop: 0.003,  label: 'Conference' },
+      lobby:      { normalTemp: 21.0, normalLux: 380, p_warm: 0.0010, p_cool: 0.0005, p_lux_drop: 0.001,  label: 'Lobby' },
+      storage:    { normalTemp: 18.5, normalLux: 120, p_warm: 0.0005, p_cool: 0.0012, p_lux_drop: 0.015,  label: 'Storage' },
+      server:     { normalTemp: 25.5, normalLux: 210, p_warm: 0.0060, p_cool: 0.0003, p_lux_drop: 0.001,  label: 'Server Room' },
+      office:     { normalTemp: 22.0, normalLux: 430, p_warm: 0.0020, p_cool: 0.0008, p_lux_drop: 0.002,  label: 'Office' },
+      lab:        { normalTemp: 23.0, normalLux: 500, p_warm: 0.0025, p_cool: 0.0010, p_lux_drop: 0.008,  label: 'Lab' },
+      executive:  { normalTemp: 21.5, normalLux: 350, p_warm: 0.0008, p_cool: 0.0004, p_lux_drop: 0.0005, label: 'Executive' },
+    };
+
+    // Zone-ID prefix → personality
+    function resolvePersonality(zoneId) {
+      const id = zoneId.toUpperCase();
+      if (id === 'ZONE-A3' || id === 'ZONE-D1')                              return PERSONALITIES.lobby;
+      if (id === 'ZONE-A4' || id === 'ZONE-A5' || id === 'ZONE-B4' || id === 'ZONE-B5') return PERSONALITIES.storage;
+      if (id === 'ZONE-A6' || id === 'ZONE-C3' || id === 'ZONE-C4')         return PERSONALITIES.server;
+      if (id === 'ZONE-A1' || id === 'ZONE-A2' || id === 'ZONE-B1' || id === 'ZONE-B2') return PERSONALITIES.conference;
+      if (id === 'ZONE-C5' || id === 'ZONE-C6')                             return PERSONALITIES.lab;
+      if (id === 'ZONE-D2' || id === 'ZONE-D3' || id === 'ZONE-D4')         return PERSONALITIES.executive;
+      return PERSONALITIES.office; // default
+    }
+
+    // ── State machine constants ───────────────────────────────────────────────
+    const STATES = {
+      NORMAL:           'NORMAL',
+      WARMING:          'WARMING',
+      COOLING:          'COOLING',
+      THRESHOLD_BREACH: 'THRESHOLD_BREACH',
+      SEVERE:           'SEVERE',
+      CRITICAL:         'CRITICAL',
+      RECOVERING:       'RECOVERING',
+    };
+
+    // State → { tempTarget fn, luxTarget fn, tempStep, luxStep, maxTicks }
+    // tempTarget and luxTarget are functions(p, s) → number
+    const STATE_DEF = {
+      NORMAL:           { tStep: 0.12, lStep: 6,  maxTicks: Infinity },
+      WARMING:          { tStep: 0.40, lStep: 5,  maxTicks: null }, // exits when temp > softMax
+      COOLING:          { tStep: 0.40, lStep: 5,  maxTicks: null }, // exits when temp < softMin
+      THRESHOLD_BREACH: { tStep: 0.45, lStep: 4,  maxTicks: [28, 55] },  // [min,max] random in this range
+      SEVERE:           { tStep: 0.50, lStep: 8,  maxTicks: [18, 35] },
+      CRITICAL:         { tStep: 0.40, lStep: 5,  maxTicks: [8,  18] },
+      RECOVERING:       { tStep: 0.80, lStep: 12, maxTicks: null }, // exits when back near normal
+    };
+
+    function randInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+    // ── Initialise zone state ─────────────────────────────────────────────────
+    function initZoneSimState(zoneId) {
+      const p = resolvePersonality(zoneId);
+      const jitterT = (Math.random() - 0.5) * 1.2; // small per-zone baseline jitter
+      const jitterL = (Math.random() - 0.5) * 30;
       zoneSimStates.set(zoneId, {
-        temp: normalTemp, tempTrend: 0, normalTemp,
-        lux:  normalLux,  luxTrend:  0, normalLux,
+        personality: p,
+        simState:    STATES.NORMAL,
+        ticksLeft:   Infinity,        // ticks remaining in current state
+        temp:        p.normalTemp + jitterT,
+        lux:         p.normalLux  + jitterL,
+        // Heating/cooling direction for WARMING/COOLING/BREACH/SEVERE/CRITICAL
+        heatingUp:   true,
       });
       zoneTempBufs.set(zoneId, []);
       zoneLuxBufs.set(zoneId,  []);
     }
 
+    // ── State target values ───────────────────────────────────────────────────
+    function targetTemp(state, p, heatingUp) {
+      switch (state) {
+        case STATES.NORMAL:           return p.normalTemp;
+        case STATES.WARMING:          return T.tempSoftMax + 3;
+        case STATES.COOLING:          return T.tempSoftMin - 3;
+        case STATES.THRESHOLD_BREACH: return heatingUp ? T.tempSoftMax + 6 : T.tempSoftMin - 5;
+        case STATES.SEVERE:           return heatingUp ? T.tempSevereMax + 1 : T.tempSevereMin - 1;
+        case STATES.CRITICAL:         return heatingUp ? T.tempCritMax - 0.8 : T.tempCritMin + 0.8;
+        case STATES.RECOVERING:       return p.normalTemp;
+        default:                      return p.normalTemp;
+      }
+    }
+
+    function targetLux(state, p, heatingUp) {
+      switch (state) {
+        case STATES.NORMAL:           return p.normalLux;
+        case STATES.WARMING:          return p.normalLux;
+        case STATES.COOLING:          return p.normalLux;
+        case STATES.THRESHOLD_BREACH: return p.normalLux;
+        case STATES.SEVERE:           return Math.min(p.normalLux, T.luxSevereMin + 10);
+        case STATES.CRITICAL:         return T.luxCritMin + 3;
+        case STATES.RECOVERING:       return p.normalLux;
+        default:                      return p.normalLux;
+      }
+    }
+
+    // ── Transition logic ──────────────────────────────────────────────────────
+    function transitionState(s) {
+      const p    = s.personality;
+      const cur  = s.simState;
+      const temp = s.temp;
+
+      switch (cur) {
+        case STATES.NORMAL: {
+          // Roll for spontaneous transitions (rare, weighted by personality)
+          const r = Math.random();
+          // Direct dangerous jumps (very rare)
+          if (r < 0.0001) { enterState(s, STATES.CRITICAL, true);         return; }
+          if (r < 0.0009) { enterState(s, STATES.SEVERE, true);           return; }
+          if (r < 0.003)  { enterState(s, STATES.THRESHOLD_BREACH, true); return; }
+          // Personality-driven warming / cooling
+          if (r < 0.003 + p.p_warm) { enterState(s, STATES.WARMING, true);  return; }
+          if (r < 0.003 + p.p_warm + p.p_cool) { enterState(s, STATES.COOLING, false); return; }
+          break;
+        }
+        case STATES.WARMING:
+          // Auto-exit to THRESHOLD_BREACH when we cross the soft limit
+          if (temp >= T.tempSoftMax) { enterState(s, STATES.THRESHOLD_BREACH, true); return; }
+          break;
+        case STATES.COOLING:
+          if (temp <= T.tempSoftMin) { enterState(s, STATES.THRESHOLD_BREACH, false); return; }
+          break;
+        case STATES.THRESHOLD_BREACH:
+          s.ticksLeft--;
+          if (s.ticksLeft <= 0) {
+            // Small chance to escalate to SEVERE, otherwise recover
+            if (Math.random() < 0.18) enterState(s, STATES.SEVERE, s.heatingUp);
+            else                       enterState(s, STATES.RECOVERING);
+          }
+          break;
+        case STATES.SEVERE:
+          s.ticksLeft--;
+          if (s.ticksLeft <= 0) {
+            if (Math.random() < 0.12) enterState(s, STATES.CRITICAL, s.heatingUp);
+            else                       enterState(s, STATES.RECOVERING);
+          }
+          break;
+        case STATES.CRITICAL:
+          s.ticksLeft--;
+          if (s.ticksLeft <= 0) enterState(s, STATES.RECOVERING);
+          break;
+        case STATES.RECOVERING: {
+          // Exit recovery when close enough to normal
+          const diff = Math.abs(s.temp - p.normalTemp);
+          if (diff < 1.0 && Math.abs(s.lux - p.normalLux) < 30) {
+            enterState(s, STATES.NORMAL);
+          }
+          break;
+        }
+      }
+    }
+
+    function enterState(s, newState, heatingUp = true) {
+      s.simState  = newState;
+      s.heatingUp = heatingUp;
+      const def = STATE_DEF[newState];
+      if (Array.isArray(def.maxTicks)) {
+        s.ticksLeft = randInt(def.maxTicks[0], def.maxTicks[1]);
+      } else {
+        s.ticksLeft = def.maxTicks === null ? null : Infinity;
+      }
+    }
+
+    // ── Per-tick zone update ──────────────────────────────────────────────────
     function tickZone(zoneId) {
       const s = zoneSimStates.get(zoneId);
       if (!s) return null;
 
-      // Temperature random walk with mean reversion
-      s.tempTrend += (Math.random() - 0.5) * 0.35;
-      s.tempTrend  = clamp(s.tempTrend, -0.7, 0.7);
-      s.temp      += s.tempTrend;
-      s.temp      += (s.normalTemp - s.temp) * 0.018; // gentle mean reversion
-      if (Math.random() < 0.004) s.tempTrend += (Math.random() > 0.5 ? 2.0 : -1.5); // rare drift bursts
-      s.temp = clamp(s.temp, 5, 70);
+      const p   = s.personality;
+      const def = STATE_DEF[s.simState];
 
-      // Illuminance random walk with mean reversion
-      s.luxTrend += (Math.random() - 0.5) * 12;
-      s.luxTrend  = clamp(s.luxTrend, -20, 20);
-      s.lux      += s.luxTrend;
-      s.lux      += (s.normalLux - s.lux) * 0.02;
-      if (Math.random() < 0.004) s.luxTrend += (Math.random() > 0.5 ? 50 : -60);
-      s.lux = clamp(s.lux, 5, 900);
+      // 1. Compute targets
+      const tTarget = targetTemp(s.simState, p, s.heatingUp);
+      const lTarget = targetLux(s.simState,  p, s.heatingUp);
+
+      // 2. Move toward target in small steps + tiny Gaussian noise
+      const tDir    = Math.sign(tTarget - s.temp);
+      const tNoise  = (Math.random() - 0.5) * 0.08;
+      const tMove   = clamp(tDir * def.tStep + tNoise, -def.tStep * 1.3, def.tStep * 1.3);
+      s.temp       += tMove;
+      // Prevent overshooting past target in any single step
+      if (tDir > 0) s.temp = Math.min(s.temp, tTarget + 0.05);
+      if (tDir < 0) s.temp = Math.max(s.temp, tTarget - 0.05);
+
+      const lDir    = Math.sign(lTarget - s.lux);
+      const lNoise  = (Math.random() - 0.5) * 4;
+      const lMove   = clamp(lDir * def.lStep + lNoise, -def.lStep * 1.4, def.lStep * 1.4);
+      s.lux        += lMove;
+
+      // Personality-specific lux drop events
+      if (s.simState === STATES.NORMAL && Math.random() < p.p_lux_drop) {
+        s.lux -= 80 + Math.random() * 120; // sudden dip
+      }
+
+      // Hard clamp within sensor sanity bounds
+      s.temp = clamp(s.temp, -10, 90);
+      s.lux  = clamp(s.lux,   5, 900);
+
+      // 3. Check for state transitions
+      transitionState(s);
 
       return {
         agentId: `HVAC-${zoneId}`,
@@ -887,17 +1066,21 @@
       };
     }
 
+    // ── Simulation loop ───────────────────────────────────────────────────────
+    let currentFloorZoneIds = [];
+
     async function runSimTick() {
       if (!buildingConfig) return;
       const allZones = buildingConfig.floors.flatMap(f => f.zones.map(z => z.id));
       for (const zoneId of allZones) {
         const payload = tickZone(zoneId);
         if (!payload) continue;
-        // Push to graph buffers immediately for smooth UI (don't wait for response)
+        // Update graph buffers (all zones tracked, graphs shown per floor)
         pushToBuffer(zoneTempBufs, zoneId, payload.metrics.ambient_temp_celsius);
         pushToBuffer(zoneLuxBufs,  zoneId, payload.metrics.work_plane_illuminance_lux);
-        redrawZoneGraph(zoneId);
-        // POST to backend — AI Engine decides anomalies
+        // Only redraw graphs for zones on the currently visible floor
+        if (currentFloorZoneIds.includes(zoneId)) redrawZoneGraph(zoneId);
+        // POST to backend — AI Engine is the sole source of truth for anomalies
         fetch('/api/telemetry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -908,8 +1091,8 @@
 
     function setSimRunning(running) {
       isSimRunning = running;
-      simDot.className   = `sim-dot ${running ? 'running' : 'stopped'}`;
-      simLabel.className = `sim-label ${running ? 'running' : ''}`;
+      simDot.className     = `sim-dot ${running ? 'running' : 'stopped'}`;
+      simLabel.className   = `sim-label ${running ? 'running' : ''}`;
       simLabel.textContent = running ? 'RUNNING' : 'STOPPED';
       btnRun.disabled  = running;
       btnStop.disabled = !running;
@@ -918,7 +1101,7 @@
     btnRun.addEventListener('click', () => {
       if (isSimRunning) return;
       setSimRunning(true);
-      runSimTick(); // immediate first tick
+      runSimTick();
       simInterval = setInterval(runSimTick, 2000);
     });
 
@@ -938,9 +1121,9 @@
 
     function valueColor(val, metric) {
       if (metric === 'temp') {
-        if (val >= T.tempCritMax || val <= T.tempCritMin) return '#ef4444';
+        if (val >= T.tempCritMax   || val <= T.tempCritMin)   return '#ef4444';
         if (val >= T.tempSevereMax || val <= T.tempSevereMin) return '#f97316';
-        if (val >= T.tempSoftMax  || val <= T.tempSoftMin)   return '#f59e0b';
+        if (val >= T.tempSoftMax   || val <= T.tempSoftMin)   return '#f59e0b';
         return '#0ea5e9';
       } else {
         if (val <= T.luxCritMin)   return '#ef4444';
@@ -952,28 +1135,28 @@
 
     function redrawCanvas(canvas, buf, metric) {
       const ctx = canvas.getContext('2d');
-      const W   = canvas.width  = canvas.offsetWidth  * (window.devicePixelRatio || 1);
-      const H   = canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+      const dpr = window.devicePixelRatio || 1;
+      const W   = canvas.width  = canvas.offsetWidth  * dpr;
+      const H   = canvas.height = canvas.offsetHeight * dpr;
       ctx.clearRect(0, 0, W, H);
 
-      // Define threshold lines for this metric
       let lines = [];
       if (metric === 'temp') {
         lines = [
-          { val: T.tempCritMax,   color: '#ef4444', label: `${T.tempCritMax}°C` },
-          { val: T.tempSevereMax, color: '#f97316', label: `${T.tempSevereMax}°C` },
-          { val: T.tempSoftMax,   color: '#f59e0b', label: `${T.tempSoftMax}°C` },
-          { val: T.tempSoftMin,   color: '#f59e0b', label: `${T.tempSoftMin}°C` },
+          { val: T.tempCritMax,   color: '#ef4444' },
+          { val: T.tempSevereMax, color: '#f97316' },
+          { val: T.tempSoftMax,   color: '#f59e0b' },
+          { val: T.tempSoftMin,   color: '#f59e0b' },
         ];
       } else {
         lines = [
-          { val: T.luxSoftMin,   color: '#f59e0b', label: `${T.luxSoftMin}lx` },
-          { val: T.luxSevereMin, color: '#f97316', label: `${T.luxSevereMin}lx` },
-          { val: T.luxCritMin,   color: '#ef4444', label: `${T.luxCritMin}lx` },
+          { val: T.luxSoftMin,   color: '#f59e0b' },
+          { val: T.luxSevereMin, color: '#f97316' },
+          { val: T.luxCritMin,   color: '#ef4444' },
         ];
       }
 
-      const allVals = [...buf];
+      const allVals    = [...buf];
       const threshVals = lines.map(l => l.val);
       const minV = Math.min(...allVals, ...threshVals) - 3;
       const maxV = Math.max(...allVals, ...threshVals) + 3;
@@ -981,61 +1164,41 @@
 
       function yOf(v) { return H - ((v - minV) / range) * H * 0.88 - H * 0.06; }
 
-      // Draw threshold lines
+      // Threshold lines
       lines.forEach(line => {
-        const y = yOf(line.val);
         ctx.save();
         ctx.setLineDash([4, 6]);
         ctx.strokeStyle = line.color + '90';
-        ctx.lineWidth   = 1 * (window.devicePixelRatio || 1);
+        ctx.lineWidth   = dpr;
+        const y = yOf(line.val);
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
         ctx.restore();
       });
 
       if (buf.length < 2) return;
-
-      const stepX = W / (GRAPH_POINTS - 1);
-
-      // Filled area
-      ctx.beginPath();
-      buf.forEach((v, i) => {
-        const x = i * stepX;
-        const y = yOf(v);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      ctx.lineTo((buf.length - 1) * stepX, H);
-      ctx.lineTo(0, H);
-      ctx.closePath();
+      const stepX   = W / (GRAPH_POINTS - 1);
       const lastVal = buf[buf.length - 1];
       const col     = valueColor(lastVal, metric);
-      const grad    = ctx.createLinearGradient(0, 0, 0, H);
-      grad.addColorStop(0, col + '40');
-      grad.addColorStop(1, col + '05');
-      ctx.fillStyle = grad;
-      ctx.fill();
+
+      // Filled gradient area
+      ctx.beginPath();
+      buf.forEach((v, i) => { const x = i * stepX, y = yOf(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.lineTo((buf.length - 1) * stepX, H); ctx.lineTo(0, H); ctx.closePath();
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, col + '40'); grad.addColorStop(1, col + '05');
+      ctx.fillStyle = grad; ctx.fill();
 
       // Line
       ctx.beginPath();
-      buf.forEach((v, i) => {
-        const x = i * stepX;
-        const y = yOf(v);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = col;
-      ctx.lineWidth   = 1.5 * (window.devicePixelRatio || 1);
-      ctx.lineJoin    = 'round';
-      ctx.stroke();
+      buf.forEach((v, i) => { const x = i * stepX, y = yOf(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.strokeStyle = col; ctx.lineWidth = 1.5 * dpr; ctx.lineJoin = 'round'; ctx.stroke();
 
-      // Dot at latest value
-      const lx = (buf.length - 1) * stepX;
-      const ly = yOf(lastVal);
-      ctx.beginPath();
-      ctx.arc(lx, ly, 3 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
-      ctx.fillStyle = col;
-      ctx.fill();
+      // Latest-value dot
+      const lx = (buf.length - 1) * stepX, ly = yOf(lastVal);
+      ctx.beginPath(); ctx.arc(lx, ly, 3 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
     }
 
-    // Canvas DOM elements keyed by zoneId
     const tempCanvases = new Map();
     const luxCanvases  = new Map();
     const tempValEls   = new Map();
@@ -1044,7 +1207,6 @@
     function redrawZoneGraph(zoneId) {
       const tBuf = zoneTempBufs.get(zoneId);
       const lBuf = zoneLuxBufs.get(zoneId);
-
       const tc = tempCanvases.get(zoneId);
       const lc = luxCanvases.get(zoneId);
       const tv = tempValEls.get(zoneId);
@@ -1056,13 +1218,12 @@
         if (tv) {
           tv.textContent = `${last.toFixed(1)}°C`;
           tv.className   = 'telem-current-val ' + (
-            last >= T.tempCritMax || last <= T.tempCritMin     ? 'crit'   :
+            last >= T.tempCritMax   || last <= T.tempCritMin   ? 'crit'   :
             last >= T.tempSevereMax || last <= T.tempSevereMin ? 'severe' :
             last >= T.tempSoftMax   || last <= T.tempSoftMin   ? 'warn'   : ''
           );
         }
       }
-
       if (lc && lBuf && lBuf.length) {
         redrawCanvas(lc, lBuf, 'lux');
         const last = lBuf[lBuf.length - 1];
@@ -1077,13 +1238,15 @@
       }
     }
 
-    function buildTelemGraphs(allZones) {
+    // buildTelemGraphs: scoped to the zones passed in (current floor only)
+    function buildTelemGraphs(floorZones) {
       hvacZonesEl.innerHTML  = '';
       lightZonesEl.innerHTML = '';
       tempCanvases.clear(); luxCanvases.clear();
       tempValEls.clear();   luxValEls.clear();
 
-      allZones.forEach(zoneId => {
+      floorZones.forEach(zoneId => {
+        const p = resolvePersonality(zoneId);
         ['temp', 'lux'].forEach(metric => {
           const container = metric === 'temp' ? hvacZonesEl : lightZonesEl;
           const block = document.createElement('div');
@@ -1091,11 +1254,14 @@
 
           const nameRow = document.createElement('div');
           nameRow.className = 'telem-zone-name';
+
           const nameSpan = document.createElement('span');
-          nameSpan.textContent = zoneId;
+          nameSpan.innerHTML = `${zoneId} <span style="font-size:9px;color:var(--text-muted);font-weight:400;letter-spacing:0">${p.label}</span>`;
+
           const valSpan = document.createElement('span');
-          valSpan.className = 'telem-current-val';
+          valSpan.className   = 'telem-current-val';
           valSpan.textContent = '—';
+
           nameRow.appendChild(nameSpan);
           nameRow.appendChild(valSpan);
 
@@ -1106,23 +1272,15 @@
           block.appendChild(canvas);
           container.appendChild(block);
 
-          if (metric === 'temp') {
-            tempCanvases.set(zoneId, canvas);
-            tempValEls.set(zoneId, valSpan);
-          } else {
-            luxCanvases.set(zoneId, canvas);
-            luxValEls.set(zoneId, valSpan);
-          }
+          if (metric === 'temp') { tempCanvases.set(zoneId, canvas); tempValEls.set(zoneId, valSpan); }
+          else                   { luxCanvases.set(zoneId, canvas);  luxValEls.set(zoneId, valSpan);  }
         });
       });
 
-      // Trigger canvas resize on window resize
-      window.addEventListener('resize', () => {
-        allZones.forEach(z => redrawZoneGraph(z));
-      });
+      window.addEventListener('resize', () => floorZones.forEach(z => redrawZoneGraph(z)));
     }
 
-    // ── Load building config ─────────────────────────────────────────────────
+    // ── Load building config ──────────────────────────────────────────────────
     async function loadBuilding() {
       try {
         const res = await fetch('/api/building');
@@ -1134,14 +1292,15 @@
           opt.value = f.id; opt.textContent = f.label || f.id;
           floorSelect.appendChild(opt);
         }
+
+        // Init simulation states for ALL zones (sim runs on all floors simultaneously)
+        const allZones = buildingConfig.floors.flatMap(f => f.zones.map(z => z.id));
+        allZones.forEach(zId => initZoneSimState(zId));
+
+        // Show first floor's graphs
         const initial = buildingConfig.floors?.[0]?.id;
         if (initial) { floorSelect.value = initial; setFloor(initial); }
         floorSelect.addEventListener('change', () => setFloor(floorSelect.value));
-
-        // Init simulation states and graph DOM for ALL zones across ALL floors
-        const allZones = buildingConfig.floors.flatMap(f => f.zones.map(z => z.id));
-        allZones.forEach((zId, idx) => initZoneSimState(zId, idx));
-        buildTelemGraphs(allZones);
 
       } catch (_) {}
     }
