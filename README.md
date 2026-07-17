@@ -1,136 +1,138 @@
-# ARBOR — Physical AI Smart Building Gateway (Track B)
+# ARBOR — AI Smart Building Gateway 🏢🚀
 
-Zero-cloud, edge-native Building Management System PoC. Node.js / Express / MongoDB / Socket.io.
+**ARBOR** is a state-of-the-art, edge-native Building Management System (BMS) Proof-of-Concept. It is built to demonstrate how a local-first, zero-cloud architecture can monitor building telemetry (HVAC and Lighting), execute sophisticated anomaly detection algorithms, and dispatch actionable automated Work Orders—strictly mirroring the operations of a professional Network Operations Center (NOC).
 
-## Prerequisites
+![ARBOR Platform](public/favicon.ico) *A fully self-contained smart building gateway.*
 
-- Node.js ≥ 18
-- MongoDB Community Edition (port `27017`)
-- ngrok (optional, for remote simulator traffic)
+---
 
-## Quick Start
+## 🌟 What makes ARBOR unique?
 
-```bash
-# 1. Install dependencies
-npm install
+1. **Edge-Native:** ARBOR does not depend on cloud providers. It runs locally, keeping telemetry securely on-premises.
+2. **Incident-Centric UI:** Rather than a chaotic log of numbers, ARBOR squashes duplicates and tracks live incidents. If an HVAC unit overheats 50 times, ARBOR creates exactly **one** persistently updating Work Order.
+3. **Multi-Agent Simulation:** The repository comes shipped with its own physical simulator. Dedicated Agents emulate thermal and photometric dynamics dynamically directly in the browser to validate backend performance in real-time.
+4. **Deterministic Anomaly Pipeline:** Outliers are strictly graded by an AI Engine utilizing sliding standard deviations (Z-Scores) layered beneath absolute ceiling thresholds, filtering out sensor jitter natively.
 
-# 2. Copy environment config
-cp .env.example .env
+---
 
-# 3. Start MongoDB (if not running as a service)
-mongod --dbpath ./data/db
+## 🛠 Tech Stack
 
-# 4. Start the backend
-npm start
-# → http://localhost:3000
+ARBOR is built purely on robust, unopinionated technologies without heavy UI framework bloat:
 
-# 5. (Optional) Expose via ngrok
-ngrok http 3000
+- **Backend / Routing:** Node.js, Express.js
+- **Database / Persistence:** MongoDB (via Mongoose)
+- **Real-Time Pub/Sub:** Socket.io
+- **Frontend Core:** Vanilla HTML/CSS/JavaScript
+- **Visualization:** Native HTML5 `<canvas>` (ensuring 0-lag hardware-accelerated rendering)
+
+---
+
+## ⚙️ Quick Start
+
+### Prerequisites
+- [Node.js](https://nodejs.org/en/) (v18 or higher)
+- [MongoDB](https://www.mongodb.com/) (running locally on port `27017` or via a valid connection URI)
+
+### Installation & Launch
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Ayush-1204/AI_BMS_B.git
+   cd AI_BMS_B
+   ```
+
+2. **Install all dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment:**
+   *(Optional)* Duplicate `.env.example` as `.env` and fill in your variables. By default, it connects to `mongodb://localhost:27017/arborBMS`.
+
+4. **Start the Engine:**
+   ```bash
+   node server.js
+   ```
+
+5. **Open the Dashboard:**
+   Click here to view your Edge node: [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 🏗 System Architecture & Component Mapping
+
+The system is highly decoupled to separate concerns efficiently:
+
+```text
+AI_BMS_B/
+├── server.js              # 🔗 Express API & Socket server initialization
+├── aiEngine.js            # 🧠 Anomaly Logic (Z-Scores, Tier filtering)
+├── constants.js           # ⚙️ Single Source of Truth (zones, thresholds)
+├── models.js              # 💾 MongoDB Schemas (Telemetry, WorkOrder)
+├── building.json          # 🗺️ Spatial layout configurations
+│
+└── public/                # 🖥️ Frontend Gateway Assets
+    ├── index.html         # Shell template
+    ├── css/
+    │   └── styles.css     # CSS Variables, Grids, and Glassmorphism 
+    └── js/
+        ├── app.js         # UI Orchestrator, Sockets, layout plotting
+        └── simulation.js  # Telemetry Generation & Component physics
 ```
 
-## Phase 1–5 — What's Implemented
+---
 
-| Module | Status |
-|---|---|
-| `constants.js` | Shared zone IDs, fault types, thresholds |
-| `server.js` | Express + Socket.io, Mongo retry, telemetry ingestion, dedup/cooldown, `POST /api/simulate/fault`, `GET /api/debug/zscore/:zone` |
-| `models.js` | `Telemetry` + `WorkOrder` Mongoose schemas (incl. dedup fields) |
-| `aiEngine.js` | Per-zone rolling Z-Score engine + hard rules |
-| `fleetSimulator.js` | HVAC (4s) + lighting (5s) loops, F/L fault injector |
-| `public/index.html` | Full dashboard: floor plan, incident log, inject button, audio/visual alerts |
-| `public/floor_plan.svg` | Static floor plan with zone overlays |
-| `scripts/resetDb.js` | Demo reset utility for Telemetry + WorkOrders |
+## 🧠 The AI Engine (`aiEngine.js`)
+Instead of just logging endless sensor values, the backend runs a multi-gated anomaly engine:
 
-## Verify Phase 4
+- **Gate 1 (Stability):** Analyzes mathematically whether a sensor is oscillating unreliably to cleanly intercept and flag broken physical sensors before they taint the data pipeline.
+- **Gate 2 (Critical Bounds):** Intercepts severe outliers (e.g., freezing temperatures or critical overheating) for instant Tier-1 dispatch without requiring sufficient historical averages.
+- **Gate 3 (Z-Score Confidence Model):** Contextually grades deviations against recent rolling windows (sliding averages) to provide calculated "Confidence Scores" for subtle anomalies.
 
+### Telemetry Flow
+1. `simulation.js` generates a data tick for `ZONE-A1`.
+2. The browser POSTs the payload to `/api/telemetry` via HTTP.
+3. Express passes the payload to `aiEngine.js`.
+4. If an anomaly is detected, `server.js` deduplicates it against MongoDB records spanning the last few minutes.
+5. `server.js` emits either a `new-work-order` or `work-order-repeat` to the dashboard via `Socket.io`.
+6. `app.js` processes the emission and seamlessly updates the UI without unmounting or exploding the DOM.
+
+---
+
+## 📡 Core API Capabilities
+
+ARBOR natively exposes raw analytical vectors via ReST routes. Use these to interface with external systems.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| **POST** | `/api/telemetry` | Ingests external physical sensor data. |
+| **GET** | `/api/building` | Acquires topological blueprints defining the facility. |
+| **POST** | `/api/simulate/fault` | Triggers synthetic targeted dispatch anomalies. |
+| **GET** | `/api/debug/zscore/:zone` | Diagnostic lookup fetching pure statistical engine metrics. |
+| **GET** | `/api/contract` | Retrieves all standard zone definitions and system thresholds. |
+
+---
+
+## 👾 Testing The Engine
+
+Want to verify ARBOR operates as intended? Forcefully break a zone:
+
+1. Bring the server online (`node server.js`)
+2. Open the UI at `localhost:3000`
+3. Click **"▶ Run Simulation"** inside the left control panel to establish baseline standard deviations.
+4. Open your terminal or a tool like Postman and forcefully push an anomaly directly into the backend route:
 ```bash
-# Terminal 1 — backend
-npm start
-
-# Browser — open dashboard
-# http://localhost:3000
-
-# Click "🔥 Inject Fault" — within ~2s expect:
-#   • ZONE-A1 highlighted red on floor plan
-#   • Red pulsing alert card in Incident Log
-#   • Audible tone (after "🔊 Enable Sound" or clicking Inject Fault)
-
-# Click Inject Fault again within 60s — existing card shows ×2 badge (no second card)
-```
-
-## Verify Phase 3
-
-```bash
-# Terminal 1 — backend
-npm start
-
-# Terminal 2 — dedup integration test (5 faults → 1 WorkOrder, repeatCount=5)
-npm run test:dedup
-
-# Terminal 3 — live simulator (localhost or ngrok)
-npm run simulate
-# Press F for HVAC overheat, L for lighting deficiency
-
-# Or trigger via API (same path as dashboard button will use)
+# Push an ambient heat anomaly into Conference Room A1
 curl -X POST http://localhost:3000/api/simulate/fault \
   -H "Content-Type: application/json" \
   -d '{"type":"HVAC_OVERHEAT","zone":"ZONE-A1"}'
 ```
+5. Check the dashboard. ARBOR will intercept the stream, validate the outlier, create a `#WO-HVAC-XXXX` ID, push it to MongoDB, and pulse a `CRITICAL` panel directly onto the Incident Log.
 
-## Verify Phase 2
+---
 
-```bash
-# Unit test — per-zone Z-Score isolation
-npm run test:zscore
-
-# Manual curl — two zones tracked independently
-curl -X POST http://localhost:3000/api/telemetry \
-  -H "Content-Type: application/json" \
-  -d '{"agentId":"HVAC-ZONE-A1","zone":"ZONE-A1","metrics":{"ambient_temp_celsius":22,"occupancy_detected":true}}'
-
-curl http://localhost:3000/api/debug/zscore/ZONE-A1
-curl http://localhost:3000/api/debug/zscore/ZONE-B1
-```
-
-## Project Structure
-
-```
-physical-ai-bms/
-├── package.json
-├── constants.js          # Shared contract (zones, thresholds)
-├── server.js             # Express + Socket.io hub
-├── models.js             # Mongoose schemas
-├── aiEngine.js           # Per-zone Z-Score anomaly detector
-├── fleetSimulator.js     # HVAC + lighting simulator + fault injector
-├── scripts/
-│   ├── testZScore.js     # Phase 2 isolation test
-│   └── testDedup.js      # Phase 3 dedup/cooldown test
-├── public/
-│   ├── index.html        # Real-time dashboard
-│   └── floor_plan.svg    # Floor plan graphic
-└── README.md
-```
-
-## Scripts
-
-| Command | Description |
-|---|---|
-| `npm start` | Start Express + Socket.io server |
-| `npm run dev` | Start with nodemon auto-reload |
-| `npm run test:zscore` | Run Z-Score per-zone isolation test |
-| `npm run test:dedup` | Run work-order dedup integration test |
-| `npm run simulate` | Run fleet simulator |
-| `npm run reset-db` | Clear telemetry + work orders before a rehearsal |
-
-Typical demo flow:
-
-```bash
-# 1) Clean slate
-npm run reset-db
-
-# 2) Start backend
-npm start
-
-# 3) (Optional) Start simulator in another terminal
-npm run simulate
-```
+## 🤝 Contributing & Modification
+Because ARBOR has zero-framework debt (no React/Vue pipelines entirely isolated to `public`), you can directly modify:
+- **`constants.js`**: Easily tweak system-wide thresholds and target zone layouts.
+- **`public/js/app.js`**: Edit Canvas visualization behaviors.
+- **`public/css/styles.css`**: Radically alter the `glassmorphism` aesthetic just by altering root variables.
