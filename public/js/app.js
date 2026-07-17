@@ -263,7 +263,7 @@
       arr.sort((a, b) => {
         if (a.status !== b.status) return scoreStatus[b.status] - scoreStatus[a.status];
         if (a.tier !== b.tier)     return scoreTier[b.tier] - scoreTier[a.tier];
-        return b.lastSeen - a.lastSeen;
+        return b.firstSeen - a.firstSeen;
       });
 
       // Distribute to DOM buckets
