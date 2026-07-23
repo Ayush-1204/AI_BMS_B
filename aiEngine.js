@@ -1,9 +1,11 @@
 /**
- * ARBOR AI Engine — Production-Grade Anomaly Detection (v2)
+ * ARBOR AI Engine — Production-Grade Anomaly Detection (v3)
  *
  * 4-Gate Pipeline (+ Gate 2.5 Severe):
  *   Gate 0   — Sensor Sanity        : Physically impossible → SENSOR_INVALID_READING
- *   Gate 1   — Sensor Stability     : Oscillation → SENSOR_UNSTABLE → SENSOR_FAILURE
+ *   Gate 1   — Metric Stability     : METRIC-SPECIFIC (see below)
+ *     └─ temp → Oscillation → SENSOR_UNSTABLE → SENSOR_FAILURE
+ *     └─ lux  → Lighting event → LIGHT_FLICKERING → PARTIAL/COMPLETE_LIGHTING_FAILURE
  *   Gate 2   — Critical  (Tier 1)   : Absolute breach         → Immediate Work Order
  *   Gate 2.5 — Severe    (Tier 1.5) : Severe range breach     → Low-bar Work Order
  *   Gate 3   — Confidence (Tier 2)  : Accumulated evidence    → Work Order if ≥ minConfidenceScore
@@ -11,6 +13,7 @@
  * Key invariants:
  *   - Statistics always run on the PREVIOUS window (insert happens AFTER decision).
  *   - Sensor fault paths are fully isolated from building fault paths.
+ *   - Lux stability generates LIGHTING SUBSYSTEM faults, not sensor faults.
  *   - All thresholds and weights are read from constants.js — zero magic numbers here.
  */
 
@@ -38,10 +41,18 @@ const {
   severeConsecutiveRequired:  SEVERE_CONSECUTIVE,
   persistenceWindowMs:        PERSISTENCE_WINDOW_MS,
   incidentRecoveryDurationMs: INCIDENT_RECOVERY_MS,
+  // Temp sensor stability
   stabilityWindowSize:        STABILITY_WINDOW_SIZE,
   unstableFlipsThreshold:     UNSTABLE_FLIPS,
   failureDurationMs:          FAILURE_DURATION_MS,
   minimumFailureEvents:       MIN_FAILURE_EVENTS,
+  // Lux lighting stability
+  luxStabilityWindowSize:      LUX_STABILITY_WINDOW,
+  luxFlickerFlipsThreshold:    LUX_FLICKER_FLIPS,
+  luxFlickerMinAmplitude:      LUX_FLICKER_AMP,
+  luxInstabilityDurationMs:    LUX_INSTABILITY_DURATION_MS,
+  luxInstabilityMinEvents:     LUX_INSTABILITY_MIN_EVENTS,
+  luxCompleteFailureThreshold: LUX_COMPLETE_FAIL_THRESHOLD,
 } = THRESHOLDS;
 
 const {
@@ -87,12 +98,14 @@ function _createMetricState() {
     // Incident recovery — when the zone last fully recovered (streak reset to 0)
     recoveredAt:     null,
 
-    // Sensor stability escalation — when SENSOR_UNSTABLE was first detected
-    firstUnstableAt: null,
-
-    // Sensor stability escalation — count of distinct instability events since firstUnstableAt
-    // BOTH duration AND event count must be met to escalate to SENSOR_FAILURE
+    // Temp sensor stability escalation fields
+    firstUnstableAt:    null,
     unstableEventCount: 0,
+
+    // Lux lighting stability escalation fields (unused by temp — zero overhead)
+    // firstFlickerAt / flickerEventCount track the lighting instability escalation window.
+    firstFlickerAt:    null,
+    flickerEventCount: 0,
   };
 }
 
@@ -142,13 +155,13 @@ function runSanityCheck(value, metricType) {
   return null;
 }
 
-// ─── Gate 1: Sensor Stability Check (3-tier escalation) ───────────────────────
+// ─── Gate 1a: Temp Sensor Stability Check (3-tier escalation) ─────────────────────
 //
+// Applied exclusively to temperature readings.
 // Tier 1 → SENSOR_UNSTABLE  : flips ≥ UNSTABLE_FLIPS in short window
 // Tier 2 → SENSOR_FAILURE   : BOTH failureDurationMs AND minimumFailureEvents exceeded
-//                              (time alone or events alone are NOT sufficient)
 
-function runStabilityCheck(state) {
+function runTempStabilityCheck(state) {
   const raw = state.recentRaw;
   if (raw.length < STABILITY_WINDOW_SIZE) return null;
 
@@ -191,6 +204,83 @@ function runStabilityCheck(state) {
     zScoreValue: null,
     confidence:  100,
     reason:      `Sensor unstable: ${flips} direction reversals in last ${raw.length} readings (event #${state.unstableEventCount}, ${Math.round(unstableDuration / 1000)}s elapsed)`,
+  };
+}
+
+// ─── Gate 1b: Lux Lighting Stability Check (lighting-event classification) ──────────
+//
+// Applied exclusively to illuminance (lux) readings.
+// Lux measures a LIGHTING SUBSYSTEM, so anomalous lux behaviour should generate
+// LIGHTING EVENTS rather than sensor faults.
+//
+// Rapid lux oscillations with sufficient amplitude = LIGHT_FLICKERING
+// Persistent flickering that meets BOTH duration+event thresholds = PARTIAL_LIGHTING_FAILURE
+// Sustained near-zero lux = COMPLETE_LIGHTING_FAILURE
+
+function runLuxStabilityCheck(state, currentValue) {
+  const raw = state.recentRaw;
+
+  // ── Complete failure: lux at/near zero — fast path before flip analysis ───────
+  if (currentValue <= LUX_COMPLETE_FAIL_THRESHOLD) {
+    const recentNearZero = raw.filter(v => v <= LUX_COMPLETE_FAIL_THRESHOLD * 3).length;
+    if (recentNearZero >= 3) {
+      state.firstFlickerAt    = null;
+      state.flickerEventCount = 0;
+      return {
+        isAnomaly:   true,
+        faultType:   FAULT_TYPES.COMPLETE_LIGHTING_FAILURE,
+        priority:    'High',
+        zScoreValue: null,
+        confidence:  100,
+        reason:      `Complete lighting failure: illuminance at ${currentValue} lux (${recentNearZero} consecutive near-zero readings)`,
+      };
+    }
+    return null;
+  }
+
+  // ── Flicker detection: amplitude-gated direction reversal analysis ─────────
+  if (raw.length < LUX_STABILITY_WINDOW) return null;
+
+  let qualifiedFlips = 0;
+  for (let i = 2; i < raw.length; i++) {
+    const prevDir = Math.sign(raw[i - 1] - raw[i - 2]);
+    const currDir = Math.sign(raw[i]     - raw[i - 1]);
+    const swingAmp = Math.abs(raw[i] - raw[i - 1]);
+    if (prevDir !== 0 && currDir !== 0 && prevDir !== currDir && swingAmp >= LUX_FLICKER_AMP) {
+      qualifiedFlips++;
+    }
+  }
+
+  if (qualifiedFlips < LUX_FLICKER_FLIPS) {
+    state.firstFlickerAt    = null;
+    state.flickerEventCount = 0;
+    return null;
+  }
+
+  // Flickering detected — start or advance escalation window
+  if (!state.firstFlickerAt) state.firstFlickerAt = Date.now();
+  state.flickerEventCount++;
+
+  const flickerDuration = Date.now() - state.firstFlickerAt;
+
+  if (flickerDuration >= LUX_INSTABILITY_DURATION_MS && state.flickerEventCount >= LUX_INSTABILITY_MIN_EVENTS) {
+    return {
+      isAnomaly:   true,
+      faultType:   FAULT_TYPES.PARTIAL_LIGHTING_FAILURE,
+      priority:    'High',
+      zScoreValue: null,
+      confidence:  100,
+      reason:      `Partial lighting failure: ${state.flickerEventCount} flicker events over ${Math.round(flickerDuration / 1000)}s (${qualifiedFlips} amplitude-qualified flips in window)`,
+    };
+  }
+
+  return {
+    isAnomaly:   true,
+    faultType:   FAULT_TYPES.LIGHT_FLICKERING,
+    priority:    'Medium',
+    zScoreValue: null,
+    confidence:  100,
+    reason:      `Light flickering: ${qualifiedFlips} amplitude-qualified direction reversals in last ${raw.length} readings (event #${state.flickerEventCount}, ${Math.round(flickerDuration / 1000)}s elapsed)`,
   };
 }
 
@@ -426,10 +516,14 @@ function _evaluateMetric(value, metricType, state, occupied) {
   if (sanityFault) return sanityFault;
 
   // Update short stability buffer
-  _pushToWindow(state.recentRaw, value, STABILITY_WINDOW_SIZE);
+  _pushToWindow(state.recentRaw, value, Math.max(STABILITY_WINDOW_SIZE, LUX_STABILITY_WINDOW));
 
-  // Gate 1 — Stability / 3-tier sensor fault (no stats update)
-  const stabilityFault = runStabilityCheck(state);
+  // Gate 1 — METRIC-SPECIFIC stability check
+  //   temp → sensor oscillation detection (SENSOR_UNSTABLE / SENSOR_FAILURE)
+  //   lux  → lighting event classification (LIGHT_FLICKERING / PARTIAL/COMPLETE_LIGHTING_FAILURE)
+  const stabilityFault = (metricType === 'lux')
+    ? runLuxStabilityCheck(state, value)
+    : runTempStabilityCheck(state);
   if (stabilityFault) return stabilityFault;
 
   // Gate 2 — Critical Tier-1 (stats updated; streak state reset)
